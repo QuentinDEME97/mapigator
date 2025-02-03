@@ -14,6 +14,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.keys import Keys
 
 # Configure logging
@@ -31,8 +32,13 @@ if not API_KEY:
     print("❌ ERROR: API_KEY is missing. Please set it in the .env file.")
     sys.exit(1)
 
-# Chrome WebDriver path (modify if needed)
-CHROME_DRIVER_PATH = "./chromedriver"
+options = webdriver.ChromeOptions()
+# Set up Selenium WebDriver with headless mode
+# options.add_argument("--headless")
+# options.add_argument("--disable-gpu")
+options.add_argument("--window-size=1920,1080")
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=options)
 
 
 def fetch_places(lat, lng, radius, types, verbose):
@@ -49,6 +55,7 @@ def fetch_places(lat, lng, radius, types, verbose):
 
     places = []
     next_page_token = None
+    idx = 1
 
     with Progress(SpinnerColumn(), console=console) as progress:
         task = progress.add_task("[cyan]Fetching places...", total=None)
@@ -57,6 +64,7 @@ def fetch_places(lat, lng, radius, types, verbose):
             if next_page_token:
                 params["pagetoken"] = next_page_token
 
+            console.print("Fetched {} page(s) of ? for {} places. Fetching next page...".format(idx, len(places)))
             response = requests.get(PLACES_URL, params=params)
             data = response.json()
 
@@ -74,6 +82,7 @@ def fetch_places(lat, lng, radius, types, verbose):
             next_page_token = data.get("next_page_token")
             if not next_page_token:
                 break
+            idx += 1
 
             time.sleep(2)  # Google API requires a delay before using next_page_token
 
@@ -88,20 +97,18 @@ def scrape_reviews(place_id):
     # Google Maps place URL
     url = f"https://www.google.com/maps/place/?q=place_id:{place_id}"
 
-    # Set up Selenium WebDriver with headless mode
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-
-    service = Service(CHROME_DRIVER_PATH)
-    driver = webdriver.Chrome(service=service, options=options)
+    #service = Service(CHROME_DRIVER_PATH)
+    #driver = webdriver.Chrome(service=service, options=options)
 
     console.print(f"[bold cyan]Opening Google Maps for place ID: {place_id}...[/bold cyan]")
     driver.get(url)
-    time.sleep(5)
+    time.sleep(3)
 
     try:
+        # accept all button
+        accept_buttons = driver.find_elements(By.ID, "L2AGLb")
+        if accept_buttons:
+            accept_buttons[0].click()
         # Find and click the "See all reviews" button
         review_button = driver.find_element(By.XPATH, "//button[contains(text(), 'reviews')]")
         review_button.click()
